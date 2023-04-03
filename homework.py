@@ -20,8 +20,6 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-# предыдущее состояние статуса проверяемой работы
-verdict_old = ''
 # Здесь задана глобальная конфигурация для всех логгеров
 logging.basicConfig(
     level=logging.DEBUG,
@@ -40,10 +38,10 @@ def check_tokens():
     которые необходимы для работы программы.
     Если отсутствует хотя бы одна переменная окружения —
     продолжать работу бота нет смысла'''
-    variables_check = (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+    variables_check = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
     error_variables_check = set()
     for token in variables_check:
-        if token is None:
+        if globals()[token] is None:
             error_variables_check.add(token)
     if len(error_variables_check) != 0:
         # отсутствие обязательных переменных окружения
@@ -106,18 +104,28 @@ def check_response(response):
     приведенный к типам данных Python.
     '''
     if type(response) is not dict:
-        logger.error('Полученные данные не словарь!')
+        txt_error = 'Полученные данные не словарь!'
+        logger.error(txt_error)
+        raise TypeError(txt_error)
     if 'current_date' not in response:
         # отсутствие ожидаемых ключей в ответе API (уровень ERROR)
-        logger.error('Ключ current_date отсутствует!')
+        txt_error = 'Ключ current_date отсутствует!'
+        logger.error(txt_error)
+        raise KeyError(txt_error)
     if type(response['current_date']) is not int:
-        logger.error('Объект homeworks не является целым числом'
+        txt_error = ('Объект homeworks не является целым числом'
                      'обозначающим дату в формате unixtime!')
+        logger.error(txt_error)
+        raise TypeError(txt_error)
     if 'homeworks' not in response:
         # отсутствие ожидаемых ключей в ответе API (уровень ERROR)
-        logger.error('Ключ homeworks отсутствует')
+        txt_error = 'Ключ homeworks отсутствует'
+        logger.error(txt_error)
+        raise KeyError(txt_error)
     if type(response['homeworks']) is not list:
-        logger.error('Объект homeworks не является списком')
+        txt_error = 'Объект homeworks не является списком'
+        logger.error(txt_error)
+        raise TypeError(txt_error)
     # Если записей о работе нет - вернем ПУСТОЙ список
     if response['homeworks'] == []:
         # отсутствие в ответе новых статусов (уровень DEBUG)
@@ -140,25 +148,25 @@ def parse_status(homework):
     '''
     if 'status' not in homework:
         # отсутствие ожидаемых ключей в ответе API (уровень ERROR)
-        logger.error('Ключ status отсутствует в homework')
+        txt_error = 'Ключ status отсутствует в homework'
+        logger.error(txt_error)
+        raise KeyError(txt_error)
     if 'homework_name' not in homework:
         # отсутствие ожидаемых ключей в ответе API (уровень ERROR)
-        logger.error('Ключ homework_name отсутствует в homework')
+        txt_error = 'Ключ homework_name отсутствует в homework'
+        logger.error(txt_error)
+        raise KeyError(txt_error)
     homework_status = homework.get('status')
     homework_name = homework.get('homework_name')
     if homework_status not in HOMEWORK_VERDICTS.keys():
         # неожиданный статус домашней работы,
         # обнаруженный в ответе API (уровень ERROR)
-        logger.error('Значение статуса не найдено'
+        txt_error = ('Значение статуса не найдено'
                      'в словаре HOMEWORK_VERDICTS')
+        logger.error(txt_error)
+        raise ValueError(txt_error)
     verdict = HOMEWORK_VERDICTS[homework_status]
-    # разрешаем с помощью global изменить глобальную переменную
-    global verdict_old
-    if verdict_old != verdict:
-        verdict_old = verdict
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
-    else:
-        return 'Ответа пока нет!'
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
@@ -173,7 +181,8 @@ def main():
     '''
     # проверим переменные
     if not check_tokens():
-        raise ValueError('Отсутствует одна из переменных!')
+        txt_error = 'Отсутствует одна из переменных!'
+        raise ValueError(txt_error)
     # укажем бот
     bot = Bot(token=TELEGRAM_TOKEN)
     # Для получения и обработки входящих сообщений применим класс Updater()
