@@ -182,18 +182,20 @@ def main():
     # проверим переменные
     if not check_tokens():
         txt_error = 'Отсутствует одна из переменных!'
+        logger.info(txt_error)
         raise ValueError(txt_error)
     # укажем бот
     bot = Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    logger.info("Telegram-bot запущен!")
+    # timestamp = int(time.time())
     # Для получения и обработки входящих сообщений применим класс Updater()
-    updater = Updater(token=TELEGRAM_TOKEN)
+    # updater = Updater(token=TELEGRAM_TOKEN)
     while True:
         try:
             # запускаем бота!
-            updater.start_polling()
+            # updater.start_polling()
             # получаем ответ API
-            response = get_api_answer(timestamp)
+            response = get_api_answer(0)
             # если ответ содержательный - получаем первую строку
             homework = check_response(response)
             # если строка читаема
