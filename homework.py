@@ -186,14 +186,10 @@ def main():
         raise ValueError(txt_error)
     # укажем бот
     bot = Bot(token=TELEGRAM_TOKEN)
-    logger.info("Telegram-bot запущен!")
+    logger.debug("Telegram-bot запущен!")
     # timestamp = int(time.time())
-    # Для получения и обработки входящих сообщений применим класс Updater()
-    # updater = Updater(token=TELEGRAM_TOKEN)
     while True:
         try:
-            # запускаем бота!
-            # updater.start_polling()
             # получаем ответ API
             response = get_api_answer(0)
             # если ответ содержательный - получаем первую строку
