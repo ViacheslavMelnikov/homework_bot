@@ -185,6 +185,7 @@ def main():
         raise ValueError(txt_error)
     # укажем бот
     bot = Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time())
     # Для получения и обработки входящих сообщений применим класс Updater()
     updater = Updater(token=TELEGRAM_TOKEN)
     while True:
@@ -192,7 +193,7 @@ def main():
             # запускаем бота!
             updater.start_polling()
             # получаем ответ API
-            response = get_api_answer(0)
+            response = get_api_answer(timestamp)
             # если ответ содержательный - получаем первую строку
             homework = check_response(response)
             # если строка читаема
