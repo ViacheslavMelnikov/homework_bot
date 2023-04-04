@@ -3,9 +3,8 @@ import http
 import requests
 import time
 import logging
+import telegram
 from dotenv import load_dotenv
-from telegram import Bot, TelegramError
-from telegram.ext import Updater
 from json.decoder import JSONDecodeError
 
 load_dotenv()
@@ -33,11 +32,7 @@ logger.addHandler(logging.StreamHandler())
 
 
 def check_tokens():
-    '''
-    проверяет доступность переменных окружения,
-    которые необходимы для работы программы.
-    Если отсутствует хотя бы одна переменная окружения —
-    продолжать работу бота нет смысла'''
+    """проверяет доступность переменных окружения."""
     variables_check = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
     error_variables_check = set()
     for token in variables_check:
@@ -56,28 +51,18 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    '''
-    Отправляет сообщение в Telegram чат, определяемый переменной окружения
-    TELEGRAM_CHAT_ID. Принимает на вход два параметра:
-    экземпляр класса Bot и
-    строку с текстом сообщения.
-    '''
+    """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         # удачная отправка любого сообщения в Telegram (уровень DEBUG)
         logger.debug(f'Сообщение отправленно: {message}')
-    except TelegramError as error:
+    except telegram.TelegramError as error:
         # сбой при отправке сообщения в Telegram (уровень ERROR)
         logger.error(f'Сообщение не отправленно: {error}')
 
 
 def get_api_answer(timestamp) -> dict:
-    '''
-    Делает запрос к единственному эндпоинту API-сервиса.
-    В качестве параметра в функцию передается временная метка.
-    В случае успешного запроса должна вернуть ответ API,
-    приведя его из формата JSON к типам данных Python.
-    '''
+    """Делает запрос к единственному эндпоинту API-сервиса."""
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
@@ -98,11 +83,7 @@ def get_api_answer(timestamp) -> dict:
 
 
 def check_response(response):
-    '''
-    Проверяет ответ API на соответствие документации.
-    В качестве параметра функция получает ответ API,
-    приведенный к типам данных Python.
-    '''
+    """Проверяет ответ API на соответствие документации."""
     if type(response) is not dict:
         txt_error = 'Полученные данные не словарь!'
         logger.error(txt_error)
@@ -138,14 +119,7 @@ def check_response(response):
 
 
 def parse_status(homework):
-    '''
-    Извлекает из информации о конкретной домашней работе статус
-    этой работы. В качестве параметра функция получает только один элемент
-    из списка домашних работ. В случае успеха, функция возвращает
-    подготовленную для отправки в Telegram строку, содержащую один
-    из вердиктов словаря HOMEWORK_VERDICTS.
-    ***именно для этой функци передаем только первую запись***
-    '''
+    """Извлекает статус о конкретной домашней работе."""
     if 'status' not in homework:
         # отсутствие ожидаемых ключей в ответе API (уровень ERROR)
         txt_error = 'Ключ status отсутствует в homework'
@@ -170,36 +144,30 @@ def parse_status(homework):
 
 
 def main():
-    '''
-    Основная логика работы программы.
-    Последовательность действий:
-    1. Сделать запрос к API.
-    2. Проверить ответ.
-    3. Если есть обновления — получить статус работы из обновления
-    и отправить сообщение в Telegram.
-    4. Подождать некоторое время и вернуться в пункт 1.
-    '''
+    """Основная логика работы программы."""
     # проверим переменные
     if not check_tokens():
         txt_error = 'Отсутствует одна из переменных!'
         logger.info(txt_error)
         raise ValueError(txt_error)
     # укажем бот
-    bot = Bot(token=TELEGRAM_TOKEN)
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
     logger.debug("Telegram-bot запущен!")
-    # timestamp = int(time.time())
     while True:
+        timestamp = int(time.time())
+        logger.debug("Новый забег бота!")
         try:
             # получаем ответ API
-            response = get_api_answer(0)
+            response = get_api_answer(timestamp)
             # если ответ содержательный - получаем первую строку
             homework = check_response(response)
             # если строка читаема
             if homework:
                 # подготовим текст - сообщение
                 message = parse_status(homework)
-                # отправляем сообщение
-                send_message(bot, message)
+                if message:
+                    # отправляем сообщение
+                    send_message(bot, message)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             # отправляем сообщение об ошибке
