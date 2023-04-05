@@ -1,11 +1,12 @@
 import os
+import sys
 import http
 import requests
 import time
 import logging
 import telegram
 from dotenv import load_dotenv
-from json.decoder import JSONDecodeError
+import exceptions
 
 load_dotenv()
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -33,53 +34,55 @@ logger.addHandler(logging.StreamHandler())
 
 def check_tokens():
     """проверяет доступность переменных окружения."""
-    variables_check = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
-    error_variables_check = set()
-    for token in variables_check:
-        if globals()[token] is None:
-            error_variables_check.add(token)
-    if len(error_variables_check) != 0:
-        # отсутствие обязательных переменных окружения
-        # во время запуска бота (уровень CRITICAL)
-        logger.critical(
-            'Ошибка доступности переменных:'
-            f'{" ,".join(error_variables_check)}')
-        # продолжать работу бота нет смысла
-        return False
-    # всё хорошо
-    return True
+    # Такого я не ожидал. Моё решение похоже
+    # на танец с бубном на асфальте перед светофором....
+    # Ваше решение просто увидеть горит зеленый или красный!
+    # Класс! Спасибо!
+    return all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
 
 
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
+        # Логируем сообщение перед отправкой
+        logger.info('Сообщение подготовлено к отправке.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        # удачная отправка любого сообщения в Telegram (уровень DEBUG)
-        logger.debug(f'Сообщение отправленно: {message}')
     except telegram.TelegramError as error:
         # сбой при отправке сообщения в Telegram (уровень ERROR)
         logger.error(f'Сообщение не отправленно: {error}')
+        raise exceptions.TelegramError(error)
+    else:
+        # удачная отправка любого сообщения в Telegram (уровень DEBUG)
+        logger.debug(f'Сообщение отправленно: {message}')
 
 
 def get_api_answer(timestamp) -> dict:
     """Делает запрос к единственному эндпоинту API-сервиса."""
-    payload = {'from_date': timestamp}
+    # Создаем словарь со всеми параметрами запроса
+    timestamp = timestamp or int(time.time())
+    request_params = {
+        'url': ENDPOINT,
+        'headers': {'Authorization': f'OAuth {PRACTICUM_TOKEN}'},
+        'params': {'from_date': timestamp}
+    }
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
+        logging.info('Начинаем подключение к эндпоинту {url}')
+        response = requests.get(**request_params)
         if response.status_code != http.HTTPStatus.OK:
             # недоступность эндпоинта (уровень ERROR)
-            logger.error('Страница недоступна')
-            raise http.exceptions.HTTPError()
+            """Пользуясь случаем хочу у Вас спросить:
+            можно ли в файл лога добавлять все параметры?"""
+            logger.error('Ответ сервера не является успешным!')
+            raise exceptions.WrongAPIResponseCodeError(
+                {request_params},
+                {response}
+            )
         return response.json()
-    except requests.exceptions.ConnectionError:
-        # любые другие сбои при запросе к эндпоинту (уровень ERROR)
-        logger.error('Ошибка подключения')
-    except requests.exceptions.RequestException as request_error:
-        # любые другие сбои при запросе к эндпоинту (уровень ERROR)
-        logger.error(f'Ошибка запроса {request_error}')
-    except JSONDecodeError:
-        # любые другие сбои при запросе к эндпоинту (уровень ERROR)
-        logger.error('Ошибка распознования JSON')
+    except Exception as error:
+        # недоступность эндпоинта (уровень ERROR)
+        logger.error('Во время подключения к эндпоинту произошла'
+                     ' непредвиденная ошибка!')
+        raise exceptions.ConnectionError(request_params, error)
 
 
 def check_response(response):
@@ -145,37 +148,60 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы программы."""
-    # проверим переменные
+    # Уважаемый ревьювер!
+    # Спасибо! С Вами реально интересно работать!
+    # Это не комплемент - это факт
+    # Я до первой редакции тоже делал функцию
+    # проверки новая/предыдущая запись.
+    # Ваш вариант - добавить нечего. Всё четко!
+    # Спасибо, за прекрасное ревью!
     if not check_tokens():
-        txt_error = 'Отсутствует одна из переменных!'
-        logger.info(txt_error)
-        raise ValueError(txt_error)
+        message = (
+            'Отсутсвуют обязательные переменные окружения: PRACTICUM_TOKEN,'
+            ' TELEGRAM_TOKEN, TELEGRAM_CHAT_ID.'
+            ' Программа принудительно остановлена.'
+        )
+        logger.critical(message)
+        sys.exit(message)
     # укажем бот
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     logger.debug("Telegram-bot запущен!")
+    current_report: dict = {'name': '', 'output': ''}
+    prev_report: dict = current_report.copy()
     while True:
-        timestamp = int(time.time())
+        current_timestamp = int(time.time())
         logger.debug("Новый забег бота!")
         try:
             # получаем ответ API
-            response = get_api_answer(timestamp)
+            response = get_api_answer(current_timestamp)
             # если ответ содержательный - получаем первую строку
-            homework = check_response(response)
+            new_homeworks = check_response(response)
             # если строка читаема
-            if homework:
+            if new_homeworks:
                 # подготовим текст - сообщение
-                message = parse_status(homework)
-                if message:
-                    # отправляем сообщение
-                    send_message(bot, message)
+                current_report['name'] = new_homeworks['homework_name']
+                current_report['output'] = parse_status(new_homeworks)
+            else:
+                current_report['output'] = (
+                    f'За период от {current_timestamp} до настоящего момента'
+                    ' домашних работ нет.'
+                )
+            if current_report != prev_report:
+
+                send_message(bot, current_report['output'])
+                prev_report = current_report.copy()
+            else:
+                logging.debug('В ответе нет новых статусов.')
+
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            # отправляем сообщение об ошибке
-            send_message(bot, message)
-            # записываем ошибку
-            logger.error(message)
-        # дрыхнем 10 минут
-        time.sleep(RETRY_PERIOD)
+            current_report['output'] = message
+            logging.error(message, exc_info=True)
+            if current_report != prev_report:
+                send_message(bot, current_report['output'])
+                prev_report = current_report.copy()
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
